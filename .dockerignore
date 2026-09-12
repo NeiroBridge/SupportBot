@@ -1,0 +1,15 @@
+.env
+.venv
+venv
+__pycache__/
+.pytest_cache/
+.git
+.gitignore
+*.pyc
+*.docx
+_konspekt_extract.txt
+data/*.db
+docs
+tests
+README.md
+.dockerignore

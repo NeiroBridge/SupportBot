@@ -1,0 +1,12 @@
+services:
+  bot:
+    build: .
+    image: neirobridge-support-bot:latest
+    container_name: neirobridge-support-bot
+    env_file: .env
+    restart: unless-stopped
+    volumes:
+      - supportbot-data:/app/data
+
+volumes:
+  supportbot-data:

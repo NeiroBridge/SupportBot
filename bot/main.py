@@ -17,13 +17,13 @@ logger = logging.getLogger(__name__)
 
 
 def _build_bot(token: str, telegram_api_url: str) -> Bot:
-    session = None
+    session_kwargs: dict = {"timeout": 120.0}
     if telegram_api_url:
-        session = AiohttpSession(api=TelegramAPIServer.from_base(telegram_api_url))
+        session_kwargs["api"] = TelegramAPIServer.from_base(telegram_api_url)
         logger.info("Using custom Telegram API: %s", telegram_api_url)
     return Bot(
         token=token,
-        session=session,
+        session=AiohttpSession(**session_kwargs),
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
 

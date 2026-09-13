@@ -43,7 +43,10 @@ class SupportWorkflowService:
 
     async def process_message(self, session: SupportSession, message_text: str) -> str:
         if session.submitted:
-            session.reset()
+            already = (
+                FINAL_LEAD_MESSAGE if session.ticket.mode == "lead" else FINAL_SUPPORT_MESSAGE
+            )
+            return f"{already} Если нужна новая заявка, нажмите /reset."
 
         if not session.ticket.mode:
             return (

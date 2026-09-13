@@ -42,6 +42,14 @@ def test_merge_does_not_change_mode() -> None:
     assert ticket.company == "студия"
 
 
+def test_submitted_session_keeps_mode() -> None:
+    session = SupportSession(user_id=1, chat_id=1)
+    session.ticket.mode = "support"
+    session.submitted = True
+    assert session.submitted
+    assert session.ticket.mode == "support"
+
+
 def test_session_reset_clears_ticket_and_history() -> None:
     session = SupportSession(user_id=1, chat_id=1)
     session.ticket.mode = "lead"

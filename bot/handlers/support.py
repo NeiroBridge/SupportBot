@@ -1,6 +1,8 @@
+import asyncio
 import logging
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramNetworkError
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 
@@ -11,6 +13,33 @@ from services.storage import SqliteSessionRepository
 
 logger = logging.getLogger(__name__)
 router = Router()
+_user_locks: dict[int, asyncio.Lock] = {}
+
+
+def _lock_for(user_id: int) -> asyncio.Lock:
+    lock = _user_locks.get(user_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _user_locks[user_id] = lock
+    return lock
+
+
+async def _answer_with_retry(
+    message: Message,
+    text: str,
+    reply_markup=None,
+) -> None:
+    last_error: Exception | None = None
+    for attempt in range(2):
+        try:
+            await message.answer(text, reply_markup=reply_markup)
+            return
+        except TelegramNetworkError as exc:
+            last_error = exc
+            logger.warning("Telegram send failed, retry %s: %s", attempt + 1, exc)
+            await asyncio.sleep(1)
+    if last_error is not None:
+        raise last_error
 
 START_MESSAGE = (
     "Здравствуйте! Я ассистент студии NeiroBridge.\n"
@@ -119,20 +148,27 @@ async def handle_text_message(
         await message.answer("Не удалось обработать сообщение. Попробуйте ещё раз.")
         return
 
-    session: SupportSession = session_repository.get_or_create(
-        user_id=user.id,
-        chat_id=message.chat.id,
-        telegram_username=user.username,
-        telegram_first_name=user.first_name,
-    )
-
+    reply: str | None = None
     try:
-        reply = await workflow.process_message(session, message.text)
-        markup = mode_keyboard() if not session.ticket.mode else None
-        await message.answer(reply, reply_markup=markup)
+        async with _lock_for(user.id):
+            session: SupportSession = session_repository.get_or_create(
+                user_id=user.id,
+                chat_id=message.chat.id,
+                telegram_username=user.username,
+                telegram_first_name=user.first_name,
+            )
+            reply = await workflow.process_message(session, message.text)
+            markup = mode_keyboard() if not session.ticket.mode and not session.submitted else None
+        await _answer_with_retry(message, reply, markup)
     except Exception:
         logger.exception("Failed to process incoming support message")
-        await message.answer(GENERIC_ERROR_MESSAGE)
+        if reply:
+            logger.warning("Logic succeeded, skip generic error to avoid confusing the client")
+            return
+        try:
+            await _answer_with_retry(message, GENERIC_ERROR_MESSAGE)
+        except Exception:
+            logger.exception("Could not send generic error message")
 
 
 @router.message()
